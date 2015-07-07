@@ -3,6 +3,7 @@ package com.udacity.jcmb.spotifystreamer.activities;
 import android.app.SearchManager;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.os.Handler;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
@@ -45,6 +46,9 @@ import java.util.ArrayList;
 @EActivity(R.layout.activity_search_activty)
 public class SearchActivity extends AppCompatActivity {
 
+    private static final String ARTISTS = "artists";
+    private static final java.lang.String TITLE = "title";
+
     @App
     SpotifyStreamer spotifyStreamer;
 
@@ -80,8 +84,10 @@ public class SearchActivity extends AppCompatActivity {
 
     @Bean
     ArtistsAdapter adapter;
-
-    boolean first = true;
+    Bundle savedInstanceState;
+    private boolean first = true;
+    private ArrayList<Artist> artists;
+    private String title;
 
     @AfterViews
     void init()
@@ -95,12 +101,6 @@ public class SearchActivity extends AppCompatActivity {
         rvArtists.addItemDecoration(new CustomItemDecoration(16));
         rvArtists.setAdapter(adapter);
     }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-    }
-
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
@@ -143,6 +143,11 @@ public class SearchActivity extends AppCompatActivity {
     @OptionsItem
     boolean search()
     {
+        if(savedInstanceState != null)
+        {
+            savedInstanceState.clear();
+            savedInstanceState = null;
+        }
         return true;
     }
 
@@ -153,24 +158,28 @@ public class SearchActivity extends AppCompatActivity {
         return true;
     }
 
-
-
     private void handleIntent(Intent intent) {
 
-        if (Intent.ACTION_SEARCH.equals(intent.getAction())) {
-            first = false;
-            layoutIntro.setVisibility(View.GONE);
-            rvArtists.setVisibility(View.VISIBLE);
-            layoutLoading.setVisibility(View.VISIBLE);
-            ivError.setVisibility(View.GONE);
-            tvLoading.setText(R.string.loading_content);
-            String query = intent.getStringExtra(SearchManager.QUERY);
-            setTitle(query);
+        if(savedInstanceState != null)
+        {
+            artists = savedInstanceState.getParcelableArrayList(ARTISTS);
+            title = savedInstanceState.getString(TITLE);
+            prepareLayout();
+            if(artists != null && !artists.isEmpty())
+            {
+                updateAdapter();
+            }
+        }
+        else if (Intent.ACTION_SEARCH.equals(intent.getAction())) {
+            title = intent.getStringExtra(SearchManager.QUERY);
+            prepareLayout();
             //use the query to search your data somehow
             ConnectionEventsListener connectionEventsListener = new ConnectionEventsListener() {
                 @Override
                 public void onSuccess(JSONObject jsonObject) {
-                    updateAdapter(jsonObject);
+
+                    artists = ContentResolver.parseArtists(jsonObject);
+                    updateAdapter();
                 }
 
                 @Override
@@ -178,8 +187,19 @@ public class SearchActivity extends AppCompatActivity {
                     reportError();
                 }
             };
-            Connection.searchItem(query, connectionEventsListener);
+            Connection.searchItem(title, connectionEventsListener);
         }
+    }
+
+    private void prepareLayout()
+    {
+        setTitle(title);
+        first = false;
+        layoutIntro.setVisibility(View.GONE);
+        rvArtists.setVisibility(View.VISIBLE);
+        layoutLoading.setVisibility(View.VISIBLE);
+        ivError.setVisibility(View.GONE);
+        tvLoading.setText(R.string.loading_content);
     }
 
     @UiThread
@@ -197,17 +217,37 @@ public class SearchActivity extends AppCompatActivity {
     }
 
     @UiThread
-    void updateAdapter(JSONObject jsonObject)
+    void updateAdapter()
     {
         layoutLoading.setVisibility(View.GONE);
-        ArrayList<Artist> artists = ContentResolver.parseArtists(jsonObject);
         spotifyStreamer.setArtists(artists);
         adapter.setArtists(artists);
         adapter.notifyDataSetChanged();
         if(artists.isEmpty())
         {
-            Snackbar.make(layoutRoot, R.string.no_artists_found, Snackbar.LENGTH_LONG).show();
+            Snackbar.make(layoutRoot, R.string.no_artists_found,
+                    Snackbar.LENGTH_LONG).show();
         }
     }
 
+    @Override
+    public void onSaveInstanceState(Bundle outState)
+    {
+        if(artists != null && !artists.isEmpty())
+        {
+            outState.putParcelableArrayList(ARTISTS, artists);
+            outState.putString(TITLE, title);
+        }
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if(savedInstanceState != null &&
+                savedInstanceState.containsKey(ARTISTS))
+        {
+            this.savedInstanceState = savedInstanceState;
+        }
+    }
 }

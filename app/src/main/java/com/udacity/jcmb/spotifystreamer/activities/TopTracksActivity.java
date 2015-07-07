@@ -4,6 +4,7 @@ import android.animation.Animator;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.os.Build;
+import android.os.Bundle;
 import android.support.design.widget.CollapsingToolbarLayout;
 import android.support.design.widget.CoordinatorLayout;
 import android.support.design.widget.Snackbar;
@@ -50,6 +51,8 @@ import io.codetail.animation.SupportAnimator;
 @EActivity(R.layout.activity_top_tracks)
 public class TopTracksActivity extends AppCompatActivity {
 
+    private static final String TRACKS = "tracks";
+
     @ViewById
     CoordinatorLayout coordinator;
 
@@ -91,6 +94,8 @@ public class TopTracksActivity extends AppCompatActivity {
 
     @Bean
     TracksAdapter adapter;
+
+    private ArrayList<Track> tracks;
 
     @AfterViews
     void init()
@@ -136,12 +141,6 @@ public class TopTracksActivity extends AppCompatActivity {
         ivArtistBackground.setImageBitmap(bitmap);
     }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        getTracks();
-    }
-
     void createCircularReveal()
     {
         coordinator.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
@@ -185,7 +184,8 @@ public class TopTracksActivity extends AppCompatActivity {
         ConnectionEventsListener connectionEventsListener = new ConnectionEventsListener() {
             @Override
             public void onSuccess(JSONObject response) {
-                parseResponse(response);
+                tracks = ContentResolver.parseTracks(response);
+                updateAdapter();
             }
 
             @Override
@@ -199,10 +199,32 @@ public class TopTracksActivity extends AppCompatActivity {
     }
 
     @UiThread
-    void parseResponse(JSONObject response)
+    void updateAdapter()
     {
-        ArrayList<Track> tracks = ContentResolver.parseTracks(response);
         adapter.setTracks(tracks);
         adapter.notifyDataSetChanged();
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        if(tracks != null)
+        {
+            outState.putParcelableArrayList(TRACKS, tracks);
+        }
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if(savedInstanceState != null && savedInstanceState.containsKey(TRACKS))
+        {
+            tracks = savedInstanceState.getParcelableArrayList(TRACKS);
+            updateAdapter();
+        }
+        else
+        {
+            getTracks();
+        }
     }
 }
